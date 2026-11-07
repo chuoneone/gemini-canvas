@@ -57,7 +57,13 @@ const IMAGE_MODEL = "gemini-3.1-flash-image-preview";
 
 ## 輸出：列印與 Word
 
-- **列印**：加 `@media print`：`.no-print` 隱藏、`.page-break`／`.prevent-break` 控制分頁、移除陰影與底色、正文用標楷體（`"標楷體","DFKai-SB",serif`）。A4 頁邊距明確指定。
+- **列印一律用「Blob 開新分頁」**：Canvas 在 iframe 裡執行，直接呼叫 `window.print()` 或按 Ctrl+P 都印不出正確內容。做法（範例見 `references/template.html` 的 `buildPrintHtml`／`openPrintWindow`）：
+  1. 把要印的內容組成**獨立完整的 HTML**，自帶 `<style>`，不依賴 Tailwind 或主頁面的 CSS。
+  2. `URL.createObjectURL(new Blob([html], { type: 'text/html;charset=utf-8' }))` 加上 `window.open(url, '_blank')` 開新分頁，一分鐘後 `URL.revokeObjectURL`。`window.open` 回傳 `null` 時，在畫面上提示使用者允許彈出式視窗。
+  3. 新分頁 `load` 後自動 `window.print()`，頂端再放一列 `.toolbar`（列印時隱藏）和「列印」按鈕備用。
+  4. 列印頁 CSS：`@page { size: A4; margin: 15mm; }`、正文用標楷體（`"標楷體","DFKai-SB",serif`）、`.prevent-break { break-inside: avoid; }`、`.page-break { break-before: page; }`。
+  5. 主介面**不要**放「按 Ctrl+P 列印」之類的提示，也不需要寫主頁面的 `@media print`。
+  6. 列印頁和 Word 匯出最好共用同一個產生內容的函式，確保兩邊一致。
 - **Word**：用 `docx` 產生原生 `.docx`，`saveAs(blob, "檔名.docx")`。快速版本可用 `html-docx-js`。數學題要把 LaTeX 轉成 Word 原生公式（OMML），不要輸出圖片。
 - 學習單通常有「學生版」與「教師版（含解答）」，列印與匯出時兩者要能分開。
 
@@ -65,12 +71,23 @@ const IMAGE_MODEL = "gemini-3.1-flash-image-preview";
 
 預設情境：使用者是教師，對象常是需要鷹架的學生。教學工具通常提供：貼入文本、「學生狀況描述」輸入欄、題型選擇（選擇／填空／開放式）、產生後可預覽、列印、匯出 Word。新工具預設包含這些，除非另有指定。
 
+## 出題／學習單工具：一律照標準做法
+
+做新的出題或學習單工具、或把舊工具改成這套做法時，**先讀 `references/quiz-tool-pattern.md`**。重點：
+
+- 三個畫面：設定頁（標題區＋左右兩欄不用捲動）→ 全頁等待動畫 → 可直接編輯的結果頁。
+- 題型卡片同高、點卡片就勾選；每題型可「＋加一列」各設題數與程度。
+- 一次呼叫出完整份（動態 schema），回傳後由程式把關、打亂選項。
+- 附加圖片與 PDF（提醒 PDF 太大可能辨識困難），可「轉成文字」。
+- 結果頁點文字就改、單題重新產生、刪除，都能復原；學生版／教師版分開。
+- 改舊工具：**先盤點舊功能，一個都不能默默拿掉**，換了位置要明講。
+
 ## 工作流程
 
 1. **修改既有檔**：先讀完整檔案，找出要動的區塊；保持 `apiKey = ""`、模型常數、Firebase 初始化不變；改完檢查 HTML 標籤與 JS 括號是否閉合（可用 `node --check` 檢查抽出的 script 語法）。
-2. **建立新檔**：從 `references/template.html` 開始，改標題、表單、schema、輸出區；存成使用者工作區內的單一 `.html` 檔，檔名用描述性名稱。
+2. **建立新檔**：出題／學習單類照 `references/quiz-tool-pattern.md` 的結構做；其他類型從 `references/template.html` 開始，改標題、表單、schema、輸出區；存成使用者工作區內的單一 `.html` 檔，檔名用描述性名稱。
 3. **回報時說清楚**：改了什麼、哪些部分**無法在本機驗證**（Gemini 呼叫、Firebase），請使用者貼回 Canvas 實測。
 
 ## 無法在本機驗證的事
 
-沒有 key 與 Canvas 注入變數，AI 回傳內容、Firebase 存取都測不到。本機只能驗證：語法、版面、非 AI 邏輯（用假資料取代 `fetchWithBackoff` 回傳）、列印樣式。誠實說明這點，不要宣稱「已測試可用」。
+沒有 key 與 Canvas 注入變數，AI 回傳內容、Firebase 存取都測不到。本機只能驗證：語法、版面、非 AI 邏輯（用假資料取代 `fetchWithBackoff` 回傳）、列印頁版面（把 `buildPrintHtml()` 的結果寫進預覽頁檢查）。誠實說明這點，不要宣稱「已測試可用」。具體的假資料測法、Word XML 檢查方式見 `references/quiz-tool-pattern.md` 的「本機驗證方式」。

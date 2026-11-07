@@ -11,8 +11,9 @@
 - 單一 HTML 檔、Tailwind CDN、不用建置工具
 - `apiKey = ""` 保持空字串（由 Canvas 執行時帶入）
 - 標準模型常數、`systemInstruction` + `responseSchema` 結構化輸出、`fetchWithBackoff` 重試
-- 圖片生成、列印樣式、匯出原生 Word（docx）
+- 圖片生成、列印（Canvas 內用 Blob 開新分頁）、匯出原生 Word（docx）
 - Firebase 只用 Canvas 注入的變數
+- 出題／學習單工具的標準做法：可編輯結果頁、單題重新產生、題型分程度、附加圖片與 PDF
 
 ## 安裝（複製整個 repo 到 skills 資料夾）
 
@@ -42,6 +43,7 @@ git clone https://github.com/chuoneone/gemini-canvas.git .agent/skills/gemini-ca
 SKILL.md                  # 規則與工作流程
 references/template.html  # 可直接起手的樣板
 references/firebase.md    # Canvas 專用 Firebase 初始化
+references/quiz-tool-pattern.md  # 出題／學習單工具的標準做法
 ```
 
 ## 限制

@@ -10,17 +10,6 @@
     <link href="https://fonts.googleapis.com/css2?family=Chiron+GoRound+TC:wght@200..900&display=swap" rel="stylesheet">
     <style>
         body { font-family: 'Chiron GoRound TC', 'Noto Sans TC', sans-serif; }
-        .print-only { display: none; }
-        @media print {
-            @page { size: A4; margin: 15mm; }
-            body { font-family: "標楷體", "DFKai-SB", serif; background: white; color: black; line-height: 1.5; }
-            .no-print { display: none !important; }
-            .print-only { display: block !important; }
-            .page-break { page-break-before: always; }
-            .prevent-break { page-break-inside: avoid !important; break-inside: avoid !important; }
-            #result-container { box-shadow: none !important; border: none !important; margin: 0 !important; padding: 0 !important; width: 100% !important; max-width: 100% !important; }
-            * { overflow-wrap: break-word !important; }
-        }
     </style>
 </head>
 <body class="bg-slate-50 text-slate-800 p-4 md:p-8">
@@ -44,7 +33,8 @@
         <!-- 結果區 -->
         <div id="result-container" class="bg-white rounded-xl shadow p-6 hidden"></div>
         <div id="action-buttons" class="mt-4 space-x-2 hidden no-print">
-            <button id="print-btn" class="bg-slate-700 text-white px-4 py-2 rounded">列印</button>
+            <button id="print-student-btn" class="bg-slate-700 text-white px-4 py-2 rounded">列印學生版</button>
+            <button id="print-teacher-btn" class="bg-slate-700 text-white px-4 py-2 rounded">列印教師版（含解答）</button>
             <button id="docx-btn" class="bg-blue-600 text-white px-4 py-2 rounded">匯出 Word</button>
         </div>
     </div>
@@ -132,7 +122,7 @@
                 content.questions.map((q, i) =>
                     `<div class="prevent-break mb-4"><p class="font-semibold">${i + 1}. ${q.question}</p>` +
                     (q.scaffold ? `<p class="whitespace-pre-line ml-4">${q.scaffold}</p>` : '') +
-                    `<p class="text-sm text-slate-500 no-print">解答：${q.teacherAnswer}</p></div>`).join('');
+                    `<p class="text-sm text-slate-500">解答：${q.teacherAnswer}</p></div>`).join('');
             $('action-buttons').classList.remove('hidden');
         }
 
@@ -153,7 +143,46 @@
             }
         });
 
-        $('print-btn').addEventListener('click', () => window.print());
+        // ===== 列印：Canvas 在 iframe 裡，window.print() 印不出來，改成 Blob 開新分頁 =====
+        const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+        function buildPrintHtml(content, includeAnswers) {
+            const body = content.questions.map((q, i) =>
+                `<div class="prevent-break"><p><b>${i + 1}. ${esc(q.question)}</b></p>` +
+                (q.scaffold ? `<p class="indent">${esc(q.scaffold).replace(/\n/g, '<br>')}</p>` : '') +
+                (includeAnswers ? `<p class="indent answer">解答：${esc(q.teacherAnswer)}</p>` : '') +
+                `</div>`).join('');
+            return `<!DOCTYPE html><html lang="zh-Hant"><head><meta charset="UTF-8"><title>${esc(content.title)}</title><style>
+                @page { size: A4; margin: 15mm; }
+                body { font-family: "標楷體", "DFKai-SB", serif; font-size: 12pt; color: #000; line-height: 1.6; max-width: 180mm; margin: 0 auto; padding: 12px; }
+                h1 { font-size: 18pt; text-align: center; }
+                p { margin: 0 0 6pt; }
+                .indent { margin-left: 2em; }
+                .answer { color: #444; }
+                .prevent-break { break-inside: avoid; page-break-inside: avoid; margin-bottom: 10pt; }
+                .page-break { break-before: page; page-break-before: always; }
+                .toolbar { position: sticky; top: 0; background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 8px; padding: 8px 12px; margin-bottom: 16px; font-family: sans-serif; font-size: 14px; display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+                .toolbar button { background: #334155; color: #fff; border: none; border-radius: 6px; padding: 6px 16px; font-size: 14px; cursor: pointer; }
+                @media print { .toolbar { display: none; } body { padding: 0; max-width: none; } }
+            </style></head><body>
+                <div class="toolbar"><span>列印視窗沒有出現？請按右邊的按鈕。可在列印視窗選「另存為 PDF」。</span><button onclick="window.print()">列印</button></div>
+                <h1>${esc(content.title)}</h1>
+                <p style="text-align:right;">班級：＿＿＿＿　座號：＿＿＿＿　姓名：＿＿＿＿＿＿＿＿</p>
+                ${body}
+                <script>window.addEventListener('load', () => setTimeout(() => window.print(), 300));<\/script>
+            </body></html>`;
+        }
+
+        function openPrintWindow(includeAnswers) {
+            if (!generatedContent) return;
+            const url = URL.createObjectURL(new Blob([buildPrintHtml(generatedContent, includeAnswers)], { type: 'text/html;charset=utf-8' }));
+            const win = window.open(url, '_blank');
+            if (!win) showError('新分頁被瀏覽器擋住了，請允許此網站開啟彈出式視窗後再試一次。');
+            setTimeout(() => URL.revokeObjectURL(url), 60000);
+        }
+
+        $('print-student-btn').addEventListener('click', () => openPrintWindow(false));
+        $('print-teacher-btn').addEventListener('click', () => openPrintWindow(true));
 
         // 匯出原生 Word（docx 7.x 全域 docx）
         $('docx-btn').addEventListener('click', async () => {
